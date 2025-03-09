@@ -1,15 +1,25 @@
+from sentence_transformers import SentenceTransformer
+import torch
 import lightning as L
+from lightning.pytorch.loggers import TensorBoardLogger
 
 from dataloader import SentimentDataLoader
 from model import SentimentClassifier
-import torch
 
+embedder_model = "sentence-transformers/all-MiniLM-L6-v2"
+logger = TensorBoardLogger("tb_logs", name="LSTM_model")
 model = SentimentClassifier(hidden_size=512, num_layers=2, output_size=3, bidirectional=True)
+#model.load_state_dict(torch.load("model.pt", weights_only=True))
 
-trainer = L.Trainer(limit_train_batches=100, max_epochs=2, accelerator="gpu", devices="auto", default_root_dir="models/")
+trainer = L.Trainer(limit_train_batches=0.5, max_epochs=10, accelerator="gpu", devices="auto", default_root_dir="models/", logger=logger)
 
-train_dataloader = SentimentDataLoader()
-
+train_dataloader = SentimentDataLoader(model_name=embedder_model)
 trainer.fit(model=model, train_dataloaders=train_dataloader)
 
-torch.save(model, "model.pt")
+torch.save(model.state_dict(), "model.pt")
+
+with torch.inference_mode():
+    output = model(torch.tensor(SentenceTransformer(embedder_model, device="cuda").encode(["I am happy", "I am not happy"]), dtype=torch.float32))
+    print(output)
+    prediction = torch.argmax(output, dim=1)
+    print(prediction)

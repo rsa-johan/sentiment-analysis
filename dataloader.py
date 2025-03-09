@@ -1,14 +1,15 @@
 from lightning import LightningDataModule
 from sentence_transformers import SentenceTransformer
 from torch.utils.data import DataLoader, TensorDataset
+
 import polars as pl
 import torch
 
 class SentimentDataLoader(LightningDataModule):
-    def __init__(self, batch_size: int = 100, model_name="sentence-transformers/all-MiniLM-L6-v2") -> None:
+    def __init__(self, batch_size: int = 32, model_name="") -> None:
         super().__init__()
         self.batch_size = batch_size
-        self.embedder = SentenceTransformer(model_name)
+        self.embedder = SentenceTransformer(model_name, device="cuda")
 
     def setup(self, stage: str) -> None:
         if stage == "fit":
@@ -19,7 +20,7 @@ class SentimentDataLoader(LightningDataModule):
             train_y = label.select([x for x in label.columns if x.startswith("Label")]).to_torch()
             with torch.no_grad():
                 train_x = torch.tensor(self.embedder.encode(text), dtype=torch.float32)
-                self.train_data = TensorDataset(train_x, train_y)
+                self.train_data = TensorDataset(train_x.to('cuda'), train_y.float().to('cuda'))
 
         elif stage == "test":
             test_path = "dataset/twitter_training.csv"
@@ -29,11 +30,11 @@ class SentimentDataLoader(LightningDataModule):
             test_y = label.select([x for x in label.columns if x.startswith("Label")]).to_torch()
             with torch.no_grad():
                 test_x = torch.tensor(self.embedder.encode(text), dtype=torch.float32)
-                self.test_data = TensorDataset(test_x, test_y)
+                self.test_data = TensorDataset(test_x.to('cuda'), test_y.float().to('cuda'))
 
 
     def train_dataloader(self):
-        return DataLoader(self.train_data, batch_size=32, num_workers=5)
+        return DataLoader(self.train_data, batch_size=self.batch_size)
 
     def test_dataloader(self):
-        return DataLoader(self.test_data, batch_size=32, num_workers=3)
+        return DataLoader(self.test_data, batch_size=self.batch_size)

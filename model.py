@@ -1,7 +1,10 @@
 from lightning.pytorch.utilities.types import OptimizerLRScheduler
 from lightning import LightningModule
 
+import torch
+import torch.functional as F
 from torch.nn import LSTM, BCEWithLogitsLoss, Dropout, Linear, ReLU
+from torch.nn.modules import CrossEntropyLoss
 from torch.optim import Adam
 from torchmetrics import Accuracy
 
@@ -14,8 +17,8 @@ class SentimentClassifier(LightningModule):
         self.fc3 = Linear(hidden_size//2, output_size)
         self.dropout = Dropout(0.3)
         self.relu = ReLU()
-        self.loss = BCEWithLogitsLoss()
-        self.accuracy = Accuracy(task="binary", num_classes=3)
+        self.loss = CrossEntropyLoss()
+        self.accuracy = Accuracy(task="multiclass", num_classes=3)
 
     def forward(self, lstm_input):
         lstm_out, _ = self.lstm_layer(lstm_input)
@@ -24,6 +27,7 @@ class SentimentClassifier(LightningModule):
         final_out = self.fc2(final_out)
         final_out = self.relu(final_out)
         final_out = self.fc3(final_out)
+        final_out = self.relu(final_out)
         return final_out
 
     def configure_optimizers(self) -> OptimizerLRScheduler:
@@ -33,7 +37,12 @@ class SentimentClassifier(LightningModule):
         input_i, label_i = batch
         output_i = self(input_i)
         loss_i = self.loss(output_i, label_i)
-        accuracy_i = self.accuracy(output_i, label_i)
-        self.log('train_loss', loss_i)
-        self.log('train_accuracy', accuracy_i)
+        self.log('train_loss', loss_i, prog_bar=True)
+        return loss_i
+
+    def test_step(self, batch, batch_idx):
+        input_i, label_i = batch
+        output_i = self(input_i)
+        loss_i = self.loss(output_i, label_i)
+        self.log('test_loss', loss_i, prog_bar=True)
         return loss_i

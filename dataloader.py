@@ -6,10 +6,11 @@ import polars as pl
 import torch
 
 class SentimentDataLoader(LightningDataModule):
-    def __init__(self, batch_size: int = 32, model_name="") -> None:
+    def __init__(self, batch_size: int = 32, model_name="", device="") -> None:
         super().__init__()
         self.batch_size = batch_size
-        self.embedder = SentenceTransformer(model_name, device="cuda")
+        self.embedder = SentenceTransformer(model_name, device=device)
+        self.device = device
 
     def setup(self, stage: str) -> None:
         if stage == "fit":
@@ -20,7 +21,7 @@ class SentimentDataLoader(LightningDataModule):
             train_y = label.select([x for x in label.columns if x.startswith("Label")]).to_torch()
             with torch.no_grad():
                 train_x = torch.tensor(self.embedder.encode(text), dtype=torch.float32)
-                self.train_data = TensorDataset(train_x.to('cuda'), train_y.float().to('cuda'))
+                self.train_data = TensorDataset(train_x.to(self.device), train_y.float().to(self.device))
 
         elif stage == "test":
             test_path = "dataset/twitter_training.csv"
@@ -30,7 +31,7 @@ class SentimentDataLoader(LightningDataModule):
             test_y = label.select([x for x in label.columns if x.startswith("Label")]).to_torch()
             with torch.no_grad():
                 test_x = torch.tensor(self.embedder.encode(text), dtype=torch.float32)
-                self.test_data = TensorDataset(test_x.to('cuda'), test_y.float().to('cuda'))
+                self.test_data = TensorDataset(test_x.to(self.device), test_y.float().to(self.device))
 
 
     def train_dataloader(self):
